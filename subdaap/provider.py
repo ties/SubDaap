@@ -460,6 +460,49 @@ class Synchronizer(object):
                     # Mark as added/edited, so it won't be processed again
                     added_containers.add(container_id)
 
+    def id_for_artistname(self, database_id, artist_name):
+        with self.db.get_write_cursor() as cursor:
+            try:
+                artist_id = cursor.query_value(
+                    """
+                    SELECT id FROM `artists`
+                    WHERE
+                        `name` = ?
+                    """, artist_name)
+
+                logger.info("re-using artist [%d]: %s", artist_id, artist_name)
+
+                return artist_id
+            except:
+                if not artist_name:
+                    return None
+
+                # Insert synthetic artist (= with negative id)
+                artist_checksum = utils.dict_checksum({
+                    "name": artist_name
+                })
+
+                cursor.query(
+                    """
+                    INSERT INTO `artists` (
+                        `database_id`,
+                        `name`,
+                        `remote_id`,
+                        `checksum`)
+                    VALUES
+                        (?, ?, ?, ?)
+                    """,
+                    database_id,
+                    artist_name,
+                    None, # Consistent with Container
+                    artist_checksum)
+
+                rowid = cursor.lastrowid
+
+                logger.info("Synthetic artist [%d] '%s'", rowid, artist_name)
+                
+                return rowid
+
     def sync_items(self):
         """
         Synchronize artists, albums and items.
@@ -652,10 +695,19 @@ class Synchronizer(object):
                     try:
                         item_artist_id = local_artists[item["artistId"]][1]
                     except KeyError:
-                        item_artist_id = None
+                        artist_name = item.get("artist", None)
+                        artist_id = item.get("artistId", None)
+
+                        logger.info("error: no local artist (id: %s)"
+                                    ", artist='%s'", artist_id, artist_name)
+
+                        item_artist_id = self.id_for_artistname(database_id,
+                                                                artist_name)
                     try:
                         item_album_id = local_albums[item["albumId"]][1]
                     except KeyError:
+                        logger.info("item_album_id eror. albumId = %s",
+                                    item.get("albumId", None))
                         item_album_id = None
                     try:
                         item_duration = item["duration"] * 1000
