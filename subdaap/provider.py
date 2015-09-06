@@ -76,7 +76,11 @@ class Provider(provider.Provider):
             self.cache_manager.item_cache.download(
                 item.id, cache_item, remote_fd)
 
+            real_file_size = remote_fd.headers.get('content-length',
+                                                   item.file_size)
+            print("real size: {}".format(real_file_size))
+
             return cache_item.iterator(byte_range), item.file_type, \
-                item.file_size
+                real_file_size
         return cache_item.iterator(byte_range), item.file_type, \
             cache_item.size
