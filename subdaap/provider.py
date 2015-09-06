@@ -76,6 +76,9 @@ class Provider(provider.Provider):
             self.cache_manager.item_cache.download(
                 item.id, cache_item, remote_fd)
 
+            # When a file is being transcoded, the real size is much smaller
+            # than the source file size that is stored in the item's metadata.
+            # -> return the file size estimated by subsonic from the headers.
             real_file_size = remote_fd.headers.get('content-length',
                                                    item.file_size)
             print("real size: {}".format(real_file_size))
